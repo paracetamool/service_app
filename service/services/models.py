@@ -1,8 +1,10 @@
 from django.db import models
 from django.core.validators import MaxValueValidator
+from django.db.models.signals import post_delete
 
 from clients.models import Client
 from .tasks import set_ptice, set_comment
+from .recievers import delete_cache_total_sum
 
 
 class Service(models.Model):
@@ -55,3 +57,15 @@ class Subscription(models.Model):
     plan = models.ForeignKey(Plan, related_name="subscriptions", on_delete=models.PROTECT)
     price = models.PositiveIntegerField(default=0)
     comment = models.CharField(max_length=50, default='')
+
+
+    def save(self, *args,  **kwargs):
+        response = super().save(*args, **kwargs)
+        creating = not bool(not self.id)
+        if creating:
+            set_ptice.delay(self.id)
+
+        return response
+
+
+post_delete.connect(delete_cache_total_sum, sender=Subscription)
